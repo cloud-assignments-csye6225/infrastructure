@@ -1,0 +1,109 @@
+AWSTemplateFormatVersion: "2010-09-09"
+
+Description: CSYE6225 Infrastructure - Assignment 3
+
+Parameters:
+  vpcCIDR:
+    Default: "10.0.0.0/16"
+    Type: String
+    Description: CIDR block for VPC
+  aSubnetCIDR:
+    Default: "10.0.1.0/24"
+    Type: String
+    Description: CIDR block for public subnet a
+  bSubnetCIDR:
+    Default: "10.0.2.0/24"
+    Type: String
+    Description: CIDR block for public subnet b
+  cSubnetCIDR:
+    Default: "10.0.3.0/24"
+    Type: String
+    Description: CIDR block for public subnet c
+
+Resources:
+  vpc:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: !Ref vpcCIDR
+      EnableDnsSupport: "true"
+      EnableDnsHostnames: "true"
+      InstanceTenancy: "default"
+      Tags:
+      - Key: Name
+        Value: myVPC
+
+  subnetA:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref vpc
+      CidrBlock: !Ref aSubnetCIDR
+      AvailabilityZone: !Select [0, !GetAZs ""]
+      Tags:
+      - Key: Name
+        Value: subnet A
+
+  subnetB:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref vpc
+      CidrBlock: !Ref bSubnetCIDR
+      AvailabilityZone: !Select [1, !GetAZs ""]
+      Tags:
+      - Key: Name
+        Value: subnet B
+
+  subnetC:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref vpc
+      CidrBlock: !Ref cSubnetCIDR
+      AvailabilityZone: !Select [2, !GetAZs ""]
+      Tags:
+      - Key: Name
+        Value: subnet C
+
+  internetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: IG-myVPC
+
+  igAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      InternetGatewayId: !Ref internetGateway
+      VpcId: !Ref vpc
+
+  publicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      Tags:
+        - Key: Name
+          Value: PublicRouteTable
+      VpcId: !Ref vpc
+
+  publicRoute:
+    Type: AWS::EC2::Route
+    Properties:
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref internetGateway
+      RouteTableId: !Ref publicRouteTable
+
+  subnetApublicRouteTable:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref publicRouteTable
+      SubnetId: !Ref subnetA
+
+  subnetBpublicRouteTable:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref publicRouteTable
+      SubnetId: !Ref subnetB
+
+  subnetCpublicRouteTable:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref publicRouteTable
+      SubnetId: !Ref subnetC
