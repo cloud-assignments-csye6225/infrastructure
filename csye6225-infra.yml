@@ -107,3 +107,28 @@ Resources:
     Properties:
       RouteTableId: !Ref publicRouteTable
       SubnetId: !Ref subnetC
+
+  #EC2 Security Group
+  applicationSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      VpcId: !Ref myVPC
+      GroupDescription: ec2 Security group with ports
+      GroupName: applicationSecurityGroup
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          CidrIp: 0.0.0.0/0
+          FromPort: 22
+          ToPort: 22
+        - IpProtocol: tcp
+          CidrIp: 0.0.0.0/0
+          FromPort: 443
+          ToPort: 443
+        - IpProtocol: tcp
+          CidrIp: 0.0.0.0/0
+          FromPort: 3000
+          ToPort: 3000
+        - IpProtocol: tcp
+          CidrIp: 0.0.0.0/0
+          FromPort: 80
+          ToPort: 80
