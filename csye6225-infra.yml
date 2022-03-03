@@ -19,6 +19,10 @@ Parameters:
     Default: "10.0.3.0/24"
     Type: String
     Description: CIDR block for public subnet c
+  imageId:
+    Default: ""
+    Type: String
+    Description: AMI ID
 
 Resources:
   vpc:
@@ -107,3 +111,45 @@ Resources:
     Properties:
       RouteTableId: !Ref publicRouteTable
       SubnetId: !Ref subnetC
+
+  ec2SecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      VpcId: !Ref vpc
+      GroupDescription: Security group for webservice EC2 Instance
+      GroupName: application
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          CidrIp: 0.0.0.0/0
+          FromPort: 22
+          ToPort: 22
+        - IpProtocol: tcp
+          CidrIp: 0.0.0.0/0
+          FromPort: 443
+          ToPort: 443
+        - IpProtocol: tcp
+          CidrIp: 0.0.0.0/0
+          FromPort: 3000
+          ToPort: 3000
+        - IpProtocol: tcp
+          CidrIp: 0.0.0.0/0
+          FromPort: 80
+          ToPort: 80
+
+  ec2Instance:
+    Type: AWS::EC2::Instance
+    Properties:
+      ImageId: !Ref imageId
+      InstanceType: t2.micro
+      DisableApiTermination: false
+      NetworkInterfaces:
+        - SubnetId: !Ref subnetA
+          AssociatePublicIpAddress: true
+          DeviceIndex: 0
+          GroupSet: [!Ref ec2SecurityGroup]
+      BlockDeviceMappings:
+        - DeviceName: /dev/xvda
+          Ebs:
+            VolumeType: gp2
+            VolumeSize: '20'
+
