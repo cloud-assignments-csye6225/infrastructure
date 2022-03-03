@@ -109,12 +109,12 @@ Resources:
       SubnetId: !Ref subnetC
 
   #EC2 Security Group
-  applicationSecurityGroup:
+  ec2SecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      VpcId: !Ref myVPC
-      GroupDescription: ec2 Security group with ports
-      GroupName: applicationSecurityGroup
+      VpcId: !Ref vpc
+      GroupDescription: Security group for webservice EC2 Instance
+      GroupName: ec2SecurityGroup
       SecurityGroupIngress:
         - IpProtocol: tcp
           CidrIp: 0.0.0.0/0
