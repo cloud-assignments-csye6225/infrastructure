@@ -84,7 +84,7 @@ Resources:
     Properties:
       Tags:
         - Key: Name
-          Value: PublicRouteTable
+          Value: Public Route Table
       VpcId: !Ref vpc
 
   publicRoute:
@@ -139,6 +139,7 @@ Resources:
   ec2Instance:
     Type: AWS::EC2::Instance
     Properties:
+      IamInstanceProfile: !Ref ec2profile
       ImageId: !Ref imageId
       InstanceType: t2.micro
       DisableApiTermination: false
@@ -152,4 +153,210 @@ Resources:
           Ebs:
             VolumeType: gp2
             VolumeSize: '20'
+
+  #-------------------------------A5------------------------------
+  #Private Subnets for RDS instance
+  privateSubnetA:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref vpc
+      CidrBlock: 10.0.4.0/24
+      AvailabilityZone: !Select [0, !GetAZs ""]
+      MapPublicIpOnLaunch: false
+      Tags:
+      - Key: Name
+        Value: private subnet A
+  
+  privateSubnetB:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref vpc
+      CidrBlock: 10.0.5.0/24
+      AvailabilityZone: !Select [1, !GetAZs ""]
+      MapPublicIpOnLaunch: false
+      Tags:
+      - Key: Name
+        Value: private subnet B
+  
+  privateSubnetC:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref vpc
+      CidrBlock: 10.0.6.0/24
+      AvailabilityZone: !Select [2, !GetAZs ""]
+      MapPublicIpOnLaunch: false
+      Tags:
+      - Key: Name
+        Value: private subnet C
+  
+  #Private Route Table
+  privateRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      Tags:
+        - Key: Name
+          Value: Private Route Table
+      VpcId: !Ref vpc
+
+  #Private subnet associations
+  privateSubnetAprivateRouteTable:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref privateRouteTable
+      SubnetId: !Ref privateSubnetA
+
+  privateSubnetBprivateRouteTable:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref privateRouteTable
+      SubnetId: !Ref privateSubnetB
+
+  privateSubnetCprivateRouteTable:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref privateRouteTable
+      SubnetId: !Ref privateSubnetC
+
+  # Database Security Group
+  dbSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      VpcId: !Ref vpc
+      GroupDescription: Database security group
+      GroupName: database
+
+  dbSecurityGroupIngress:
+   Type: 'AWS::EC2::SecurityGroupIngress'
+   Properties:
+      GroupId: !Ref dbSecurityGroup
+      IpProtocol: tcp
+      FromPort: 5432
+      ToPort: 5432
+      SourceSecurityGroupId: !Ref ec2SecurityGroup
+
+  #Encrypted private s3 bucket
+  myS3Bucket:
+    Type: AWS::S3::Bucket
+    Properties: 
+      AccessControl: Private
+      BucketEncryption: 
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      BucketName: kdab.prod.kartheekdabbiru.me
+      CorsConfiguration:
+        CorsRules:
+          - AllowedHeaders:
+              - '*'
+            AllowedMethods:
+              - GET
+              - PUT
+              - POST
+              - DELETE
+            AllowedOrigins:
+              - '*'
+            MaxAge: '1800'
+      LifecycleConfiguration: 
+        Rules:
+          - Id: STANDARD_IA_RULE
+            Prefix: logs
+            Status: Enabled
+            ExpirationInDays: 365
+            Transitions:
+              - TransitionInDays: 30
+                StorageClass: STANDARD_IA
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+    DeletionPolicy: Delete
+  
+  #IAM role for EC2-S3 access
+  ec2csye6225:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: EC2-CSYE6225
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - ec2.amazonaws.com
+            Action:
+              - 'sts:AssumeRole'
+
+  #S3 bucket policy
+  WebAppS3:
+    Type: 'AWS::IAM::Policy'
+    Properties: 
+      PolicyName: WebAppS3
+      PolicyDocument:
+        Version : "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Action:
+              - 's3:ListBucket'
+              - 's3:GetBucketLocation'
+              - 's3:GetObject'
+              - 's3:PutObject'
+              - 's3:PostObject'
+              - 's3:DeleteObject'
+            Resource:
+              - 'arn:aws:s3:::kdab.prod.kartheekdabbiru.me'
+              - 'arn:aws:s3:::kdab.prod.kartheekdabbiru.me/*'
+      Roles: 
+        - Ref: "ec2csye6225"
+
+  #EC2 instance profile
+  ec2profile: 
+    Type: "AWS::IAM::InstanceProfile"
+    Properties: 
+      Path: "/"
+      Roles: 
+        - Ref: "ec2csye6225"
+
+  #RDS subnet group
+  rdsSubnetGroup:
+    Type: AWS::RDS::DBSubnetGroup
+    Properties: 
+      DBSubnetGroupDescription: Private subnet group for RDS instance
+      DBSubnetGroupName: rdsSubnetGroup
+      SubnetIds: 
+        - !Ref privateSubnetA
+        - !Ref privateSubnetB
+        - !Ref privateSubnetC
+
+  #RDS Parameter Group
+  rdsParameterGroup:
+    Type: AWS::RDS::DBParameterGroup
+    Properties: 
+      Description: Parameter group for PSQL based RDS instance
+      Family: postgres13
+
+  #RDS instance
+  postgresRDS:
+    Type: AWS::RDS::DBInstance
+    Properties: 
+      AllocatedStorage: 20
+      StorageType: gp2
+      Engine: postgres
+      EngineVersion: 13.4
+      DBInstanceClass: db.t3.micro
+      MultiAZ: false
+      DBInstanceIdentifier: csye6225
+      MasterUsername: csye6225
+      MasterUserPassword: multi-bun#6969
+      DBSubnetGroupName: !Ref rdsSubnetGroup
+      PubliclyAccessible: false
+      DBName: csye6225
+      DBParameterGroupName: !Ref rdsParameterGroup
+      VPCSecurityGroups: 
+        - !Ref dbSecurityGroup
+
+
+
+
+
 
