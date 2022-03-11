@@ -23,6 +23,18 @@ Parameters:
     Default: ""
     Type: String
     Description: AMI ID
+  bucketRegion:
+    Default: ""
+    Type: String
+    Description: Region for S3 bucket
+  awsAccessKey:
+    Default: ""
+    Type: String
+    Description: Prod user Access Key
+  awsSecretKey:
+    Default: ""
+    Type: String
+    Description: Prod user Secret Key
 
 Resources:
   vpc:
@@ -153,6 +165,18 @@ Resources:
           Ebs:
             VolumeType: gp2
             VolumeSize: '20'
+      UserData:
+        Fn::Base64: !Sub |
+          #!/bin/bash
+          sudo touch /tmp/app_patch/.env
+          sudo echo 'RDS_USERNAME = csye6225' >> /tmp/app_patch/.env
+          sudo echo 'RDS_PASSWORD = multi-bun#6969' >> /tmp/app_patch/.env
+          sudo echo 'RDS_HOSTNAME = ${rdsInstance.Endpoint.Address}' >> /tmp/app_patch/.env
+          sudo echo 'RDS_BUCKET_NAME = kdab.prod.kartheekdabbiru.me' >> /tmp/app_patch/.env
+          sudo echo 'RDS_DB_NAME = user_db' >> /tmp/app_patch/.env
+          sudo echo 'AWS_ACCESS_KEY = ${awsAccessKey}' >> /tmp/app_patch/.env
+          sudo echo 'AWS_SECRET_KEY = ${awsSecretKey}' >> /tmp/app_patch/.env
+          sudo echo 'AWS_BUCKET_REGION = ${bucketRegion}' >> /tmp/app_patch/.env
 
   #-------------------------------A5------------------------------
   #Private Subnets for RDS instance
@@ -336,7 +360,7 @@ Resources:
       Family: postgres13
 
   #RDS instance
-  postgresRDS:
+  rdsInstance:
     Type: AWS::RDS::DBInstance
     Properties: 
       AllocatedStorage: 20
