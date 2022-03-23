@@ -1,6 +1,6 @@
 AWSTemplateFormatVersion: "2010-09-09"
 
-Description: CSYE6225 Infrastructure - Assignment 3
+Description: CSYE6225 Infrastructure - Spring 2022
 
 Parameters:
   vpcCIDR:
@@ -27,14 +27,10 @@ Parameters:
     Default: ""
     Type: String
     Description: Region for S3 bucket
-  # awsAccessKey:
-  #   Default: ""
-  #   Type: String
-  #   Description: Prod user Access Key
-  # awsSecretKey:
-  #   Default: ""
-  #   Type: String
-  #   Description: Prod user Secret Key
+  DNSName:
+    Default: ""
+    Type: String
+    Description: prod account DNS
 
 Resources:
   vpc:
@@ -132,9 +128,9 @@ Resources:
       GroupName: application
       SecurityGroupIngress:
         - IpProtocol: tcp
-          CidrIp: 0.0.0.0/0
           FromPort: 22
           ToPort: 22
+          SourceSecurityGroupId: !Ref lbSecurityGroup
         - IpProtocol: tcp
           CidrIp: 0.0.0.0/0
           FromPort: 80
@@ -144,37 +140,37 @@ Resources:
           FromPort: 443
           ToPort: 443
         - IpProtocol: tcp
-          CidrIp: 0.0.0.0/0
           FromPort: 3000
           ToPort: 3000
+          SourceSecurityGroupId: !Ref lbSecurityGroup
         
-  ec2Instance:
-    Type: AWS::EC2::Instance
-    Properties:
-      IamInstanceProfile: !Ref ec2profile
-      ImageId: !Ref imageId
-      InstanceType: t2.micro
-      DisableApiTermination: false
-      NetworkInterfaces:
-        - SubnetId: !Ref subnetA
-          AssociatePublicIpAddress: true
-          DeviceIndex: 0
-          GroupSet: [!Ref ec2SecurityGroup]
-      BlockDeviceMappings:
-        - DeviceName: /dev/xvda
-          Ebs:
-            VolumeType: gp2
-            VolumeSize: '20'
-      UserData:
-        Fn::Base64: !Sub |
-          #!/bin/bash
-          sudo touch /tmp/app_patch/.env
-          sudo echo 'RDS_USERNAME = csye6225' >> /tmp/app_patch/.env
-          sudo echo 'RDS_PASSWORD = multi-bun#6969' >> /tmp/app_patch/.env
-          sudo echo 'RDS_HOSTNAME = ${rdsInstance.Endpoint.Address}' >> /tmp/app_patch/.env
-          sudo echo 'RDS_BUCKET_NAME = kdab.prod.kartheekdabbiru.me' >> /tmp/app_patch/.env
-          sudo echo 'RDS_DB_NAME = user_db' >> /tmp/app_patch/.env
-          sudo echo 'AWS_BUCKET_REGION = ${bucketRegion}' >> /tmp/app_patch/.env
+  # ec2Instance:
+  #   Type: AWS::EC2::Instance
+  #   Properties:
+  #     IamInstanceProfile: !Ref ec2profile
+  #     ImageId: !Ref imageId
+  #     InstanceType: t2.micro
+  #     DisableApiTermination: false
+  #     NetworkInterfaces:
+  #       - SubnetId: !Ref subnetA
+  #         AssociatePublicIpAddress: true
+  #         DeviceIndex: 0
+  #         GroupSet: [!Ref ec2SecurityGroup]
+  #     BlockDeviceMappings:
+  #       - DeviceName: /dev/xvda
+  #         Ebs:
+  #           VolumeType: gp2
+  #           VolumeSize: '20'
+  #     UserData:
+  #       Fn::Base64: !Sub |
+  #         #!/bin/bash
+  #         sudo touch /tmp/app_patch/.env
+  #         sudo echo 'RDS_USERNAME = csye6225' >> /tmp/app_patch/.env
+  #         sudo echo 'RDS_PASSWORD = multi-bun#6969' >> /tmp/app_patch/.env
+  #         sudo echo 'RDS_HOSTNAME = ${rdsInstance.Endpoint.Address}' >> /tmp/app_patch/.env
+  #         sudo echo 'RDS_BUCKET_NAME = kdab.prod.kartheekdabbiru.me' >> /tmp/app_patch/.env
+  #         sudo echo 'RDS_DB_NAME = user_db' >> /tmp/app_patch/.env
+  #         sudo echo 'AWS_BUCKET_REGION = ${bucketRegion}' >> /tmp/app_patch/.env
 
   #-------------------------------A5------------------------------
   #Private Subnets for RDS instance
@@ -239,7 +235,7 @@ Resources:
       RouteTableId: !Ref privateRouteTable
       SubnetId: !Ref privateSubnetC
 
-  # Database Security Group
+  #Database Security Group
   dbSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
@@ -376,25 +372,205 @@ Resources:
 
   #-------------------------------A6------------------------------
 
-  # #Loadbalancer Security Group
-  # lbSecurityGroup:
-  #   Type: AWS::EC2::SecurityGroup
-  #   Properties:
-  #     VpcId: !Ref vpc
-  #     GroupDescription: Load Balancer Security group to access web application
-  #     GroupName: load balancer
-  #     SecurityGroupIngress:
-  #       - IpProtocol: tcp
-  #         CidrIp: 0.0.0.0/0
-  #         FromPort: 80
-  #         ToPort: 80
-  #       - IpProtocol: tcp
-  #         CidrIp: 0.0.0.0/0
-  #         FromPort: 443
-  #         ToPort: 443
+  #Load balancer Security Group
+  lbSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      VpcId: !Ref vpc
+      GroupDescription: Load Balancer Security group to access web application
+      GroupName: load balancer
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          CidrIp: 0.0.0.0/0
+          FromPort: 80
+          ToPort: 80
+        - IpProtocol: tcp
+          CidrIp: 0.0.0.0/0
+          FromPort: 443
+          ToPort: 443
 
+  #Launch Configuration
+  asgLaunchConfig:
+    Type: AWS::AutoScaling::LaunchConfiguration
+    Properties:
+      ImageId: !Ref imageId
+      InstanceType: t2.micro
+      # KeyName: sshreeka
+      AssociatePublicIpAddress: true
+      UserData:
+        Fn::Base64: !Sub |
+          #!/bin/bash
+          sudo touch /tmp/app_patch/.env
+          sudo echo 'RDS_USERNAME = csye6225' >> /tmp/app_patch/.env
+          sudo echo 'RDS_PASSWORD = multi-bun#6969' >> /tmp/app_patch/.env
+          sudo echo 'RDS_HOSTNAME = ${rdsInstance.Endpoint.Address}' >> /tmp/app_patch/.env
+          sudo echo 'RDS_BUCKET_NAME = kdab.prod.kartheekdabbiru.me' >> /tmp/app_patch/.env
+          sudo echo 'RDS_DB_NAME = user_db' >> /tmp/app_patch/.env
+          sudo echo 'AWS_BUCKET_REGION = ${bucketRegion}' >> /tmp/app_patch/.env
+      IamInstanceProfile: !Ref ec2profile
+      LaunchConfigurationName: asg_launch_config
+      SecurityGroups: 
+        - !Ref ec2SecurityGroup
+      BlockDeviceMappings:
+        - DeviceName: /dev/xvda
+          Ebs:
+            VolumeType: gp2
+            VolumeSize: '20'
+            DeleteOnTermination: true
 
+  #Auto Scaling Group
+  asgWebApp:
+    Type: AWS::AutoScaling::AutoScalingGroup
+    Properties:
+      AutoScalingGroupName: !Sub ${AWS::StackName}-asg
+      AvailabilityZones:
+        - us-east-1a
+        - us-east-1b
+        - us-east-1c
+      Cooldown: '60'
+      LaunchConfigurationName: !Ref asgLaunchConfig
+      HealthCheckGracePeriod: 90
+      HealthCheckType: EC2
+      MinSize: '1'
+      MaxSize: '5'
+      DesiredCapacity: '1'
+      Tags:
+        - Key: Application
+          Value: WebApp
+          PropagateAtLaunch: "true"
+        - Key: Name
+          Value: !Sub ${AWS::StackName}-asg
+          PropagateAtLaunch: "true"
+      TargetGroupARNs:
+        - !Ref loadBalancerTargetGroup
+      VPCZoneIdentifier:
+        - !Ref subnetA
+        - !Ref subnetB
+        - !Ref subnetC
 
+  #Load Balancer Target Group
+  loadBalancerTargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      HealthCheckIntervalSeconds: 90
+      HealthCheckPath: '/healthz'
+      HealthCheckPort: '3000'
+      HealthCheckProtocol: 'HTTP'
+      HealthCheckTimeoutSeconds: 60
+      HealthyThresholdCount: 2
+      IpAddressType: ipv4
+      Name: !Sub ${AWS::StackName}-lb-tg
+      Port: 3000
+      Protocol: 'HTTP'
+      Tags:
+        - Key: Name
+          Value: !Sub ${AWS::StackName}-lb-tg
+      TargetGroupAttributes:
+        - Key: deregistration_delay.timeout_seconds
+          Value: '20'
+      TargetType: instance
+      UnhealthyThresholdCount: 2
+      VpcId: !Ref vpc
 
+  #Load Balancer
+  loadBalancer:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      IpAddressType: ipv4
+      LoadBalancerAttributes:
+        - Key: idle_timeout.timeout_seconds
+          Value: '60'
+      Name: !Sub ${AWS::StackName}-load-balancer
+      Scheme: internet-facing
+      SecurityGroups:
+        - !Ref lbSecurityGroup
+      Subnets:
+        - !Ref subnetA
+        - !Ref subnetB
+        - !Ref subnetC
+      Tags:
+        - Key: Application
+          Value: WebApp
+        - Key: Name
+          Value: !Sub ${AWS::StackName}-load-balancer
+      Type: application
 
+  #Load Balancer Listener
+  loadBalancerListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref loadBalancerTargetGroup
+      LoadBalancerArn: !Ref loadBalancer
+      Port: 80
+      Protocol: HTTP
 
+  #Scale up policy
+  scaleUpPolicy:
+    Type: AWS::AutoScaling::ScalingPolicy
+    Properties:
+      AdjustmentType: ChangeInCapacity
+      AutoScalingGroupName: !Ref asgWebApp
+      Cooldown: 60
+      ScalingAdjustment: 1
+
+  #Scale down policy
+  scaleDownPolicy:
+    Type: AWS::AutoScaling::ScalingPolicy
+    Properties:
+      AdjustmentType: ChangeInCapacity
+      AutoScalingGroupName: !Ref asgWebApp
+      Cooldown: 60
+      ScalingAdjustment: -1
+
+  #CPU utilization high alarm
+  cpuUtilHighAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties: 
+      AlarmActions: 
+        - !Ref scaleUpPolicy
+      AlarmDescription: Alarm when the average CPU usage is higher than 2% 
+      AlarmName: CPU Alarm - High
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions: 
+        - Name: AutoScalingGroupName
+          Value: !Ref asgWebApp
+      EvaluationPeriods: '1'
+      MetricName: CPUUtilization
+      Namespace: AWS/EC2
+      Period: '60'
+      Statistic: Average
+      Threshold: '2'
+
+  #CPU utilization low alarm
+  cpuUtilLowAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties: 
+      AlarmActions: 
+        - !Ref scaleDownPolicy
+      AlarmDescription: Alarm when the average CPU usage is lower than 1% 
+      AlarmName: CPU Alarm - Low
+      ComparisonOperator: LessThanThreshold
+      Dimensions: 
+        - Name: AutoScalingGroupName
+          Value: !Ref asgWebApp
+      EvaluationPeriods: '1'
+      MetricName: CPUUtilization
+      Namespace: AWS/EC2
+      Period: '60'
+      Statistic: Average
+      Threshold: '1'
+
+  #DNS record set group
+  lbAliasDNS:
+    Type: AWS::Route53::RecordSetGroup
+    Properties:
+      HostedZoneName: !Ref DNSName
+      Comment: Alias record directing to LoadBalancer.
+      RecordSets:
+      - Name: !Ref DNSName
+        Type: A
+        AliasTarget:
+          HostedZoneId: !GetAtt 'loadBalancer.CanonicalHostedZoneID'
+          DNSName: !GetAtt 'loadBalancer.DNSName'
