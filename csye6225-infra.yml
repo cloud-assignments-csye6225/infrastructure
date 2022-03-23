@@ -395,7 +395,6 @@ Resources:
     Properties:
       ImageId: !Ref imageId
       InstanceType: t2.micro
-      # KeyName: sshreeka
       AssociatePublicIpAddress: true
       UserData:
         Fn::Base64: !Sub |
