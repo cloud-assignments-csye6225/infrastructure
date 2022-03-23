@@ -1,6 +1,6 @@
 AWSTemplateFormatVersion: "2010-09-09"
 
-Description: CSYE6225 Infrastructure - Assignment 3
+Description: CSYE6225 Infrastructure - Spring 2022
 
 Parameters:
   vpcCIDR:
@@ -27,14 +27,10 @@ Parameters:
     Default: ""
     Type: String
     Description: Region for S3 bucket
-  # awsAccessKey:
-  #   Default: ""
-  #   Type: String
-  #   Description: Prod user Access Key
-  # awsSecretKey:
-  #   Default: ""
-  #   Type: String
-  #   Description: Prod user Secret Key
+  DNSName:
+    Default: ""
+    Type: String
+    Description: prod account DNS
 
 Resources:
   vpc:
@@ -148,33 +144,33 @@ Resources:
           ToPort: 3000
           SourceSecurityGroupId: !Ref lbSecurityGroup
         
-  ec2Instance:
-    Type: AWS::EC2::Instance
-    Properties:
-      IamInstanceProfile: !Ref ec2profile
-      ImageId: !Ref imageId
-      InstanceType: t2.micro
-      DisableApiTermination: false
-      NetworkInterfaces:
-        - SubnetId: !Ref subnetA
-          AssociatePublicIpAddress: true
-          DeviceIndex: 0
-          GroupSet: [!Ref ec2SecurityGroup]
-      BlockDeviceMappings:
-        - DeviceName: /dev/xvda
-          Ebs:
-            VolumeType: gp2
-            VolumeSize: '20'
-      UserData:
-        Fn::Base64: !Sub |
-          #!/bin/bash
-          sudo touch /tmp/app_patch/.env
-          sudo echo 'RDS_USERNAME = csye6225' >> /tmp/app_patch/.env
-          sudo echo 'RDS_PASSWORD = multi-bun#6969' >> /tmp/app_patch/.env
-          sudo echo 'RDS_HOSTNAME = ${rdsInstance.Endpoint.Address}' >> /tmp/app_patch/.env
-          sudo echo 'RDS_BUCKET_NAME = kdab.prod.kartheekdabbiru.me' >> /tmp/app_patch/.env
-          sudo echo 'RDS_DB_NAME = user_db' >> /tmp/app_patch/.env
-          sudo echo 'AWS_BUCKET_REGION = ${bucketRegion}' >> /tmp/app_patch/.env
+  # ec2Instance:
+  #   Type: AWS::EC2::Instance
+  #   Properties:
+  #     IamInstanceProfile: !Ref ec2profile
+  #     ImageId: !Ref imageId
+  #     InstanceType: t2.micro
+  #     DisableApiTermination: false
+  #     NetworkInterfaces:
+  #       - SubnetId: !Ref subnetA
+  #         AssociatePublicIpAddress: true
+  #         DeviceIndex: 0
+  #         GroupSet: [!Ref ec2SecurityGroup]
+  #     BlockDeviceMappings:
+  #       - DeviceName: /dev/xvda
+  #         Ebs:
+  #           VolumeType: gp2
+  #           VolumeSize: '20'
+  #     UserData:
+  #       Fn::Base64: !Sub |
+  #         #!/bin/bash
+  #         sudo touch /tmp/app_patch/.env
+  #         sudo echo 'RDS_USERNAME = csye6225' >> /tmp/app_patch/.env
+  #         sudo echo 'RDS_PASSWORD = multi-bun#6969' >> /tmp/app_patch/.env
+  #         sudo echo 'RDS_HOSTNAME = ${rdsInstance.Endpoint.Address}' >> /tmp/app_patch/.env
+  #         sudo echo 'RDS_BUCKET_NAME = kdab.prod.kartheekdabbiru.me' >> /tmp/app_patch/.env
+  #         sudo echo 'RDS_DB_NAME = user_db' >> /tmp/app_patch/.env
+  #         sudo echo 'AWS_BUCKET_REGION = ${bucketRegion}' >> /tmp/app_patch/.env
 
   #-------------------------------A5------------------------------
   #Private Subnets for RDS instance
@@ -435,13 +431,9 @@ Resources:
       LaunchConfigurationName: !Ref asgLaunchConfig
       HealthCheckGracePeriod: 90
       HealthCheckType: EC2
-      # LaunchTemplate:
-      #   LaunchTemplateId: !Ref asgLaunchTemplate
-      #   Version: !GetAtt asgLaunchTemplate.LatestVersionNumber
-      MinSize: '3'
+      MinSize: '1'
       MaxSize: '5'
-      DesiredCapacity: '3'
-      NewInstancesProtectedFromScaleIn: true
+      DesiredCapacity: '1'
       Tags:
         - Key: Application
           Value: WebApp
@@ -538,7 +530,7 @@ Resources:
     Properties: 
       AlarmActions: 
         - !Ref scaleUpPolicy
-      AlarmDescription: Alarm when the average CPU usage is higher than 5% 
+      AlarmDescription: Alarm when the average CPU usage is higher than 2% 
       AlarmName: CPU Alarm - High
       ComparisonOperator: GreaterThanThreshold
       Dimensions: 
@@ -549,7 +541,7 @@ Resources:
       Namespace: AWS/EC2
       Period: '60'
       Statistic: Average
-      Threshold: '5'
+      Threshold: '2'
 
   #CPU utilization low alarm
   cpuUtilLowAlarm:
@@ -557,7 +549,7 @@ Resources:
     Properties: 
       AlarmActions: 
         - !Ref scaleDownPolicy
-      AlarmDescription: Alarm when the average CPU usage is lower than 3% 
+      AlarmDescription: Alarm when the average CPU usage is lower than 1% 
       AlarmName: CPU Alarm - Low
       ComparisonOperator: LessThanThreshold
       Dimensions: 
@@ -568,4 +560,17 @@ Resources:
       Namespace: AWS/EC2
       Period: '60'
       Statistic: Average
-      Threshold: '3'
+      Threshold: '1'
+
+  #DNS record set group
+  lbAliasDNS:
+    Type: AWS::Route53::RecordSetGroup
+    Properties:
+      HostedZoneName: !Ref DNSName
+      Comment: Alias record directing to LoadBalancer.
+      RecordSets:
+      - Name: !Ref DNSName
+        Type: A
+        AliasTarget:
+          HostedZoneId: !GetAtt 'loadBalancer.CanonicalHostedZoneID'
+          DNSName: !GetAtt 'loadBalancer.DNSName'
