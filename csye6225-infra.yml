@@ -530,7 +530,7 @@ Resources:
     Properties: 
       AlarmActions: 
         - !Ref scaleUpPolicy
-      AlarmDescription: Alarm when the average CPU usage is higher than 2% 
+      AlarmDescription: Alarm when the average CPU usage is higher than 5% 
       AlarmName: CPU Alarm - High
       ComparisonOperator: GreaterThanThreshold
       Dimensions: 
@@ -541,7 +541,7 @@ Resources:
       Namespace: AWS/EC2
       Period: '60'
       Statistic: Average
-      Threshold: '2'
+      Threshold: '5'
 
   #CPU utilization low alarm
   cpuUtilLowAlarm:
@@ -549,7 +549,7 @@ Resources:
     Properties: 
       AlarmActions: 
         - !Ref scaleDownPolicy
-      AlarmDescription: Alarm when the average CPU usage is lower than 1% 
+      AlarmDescription: Alarm when the average CPU usage is lower than 3% 
       AlarmName: CPU Alarm - Low
       ComparisonOperator: LessThanThreshold
       Dimensions: 
@@ -560,7 +560,7 @@ Resources:
       Namespace: AWS/EC2
       Period: '60'
       Statistic: Average
-      Threshold: '1'
+      Threshold: '3'
 
   #DNS record set group
   lbAliasDNS:
