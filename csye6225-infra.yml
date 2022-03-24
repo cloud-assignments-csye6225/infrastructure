@@ -396,6 +396,7 @@ Resources:
       ImageId: !Ref imageId
       InstanceType: t2.micro
       AssociatePublicIpAddress: true
+      KeyName: assignment3
       UserData:
         Fn::Base64: !Sub |
           #!/bin/bash
