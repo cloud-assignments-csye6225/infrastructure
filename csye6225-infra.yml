@@ -131,14 +131,14 @@ Resources:
           FromPort: 22
           ToPort: 22
           SourceSecurityGroupId: !Ref lbSecurityGroup
-        - IpProtocol: tcp
-          CidrIp: 0.0.0.0/0
-          FromPort: 80
-          ToPort: 80
-        - IpProtocol: tcp
-          CidrIp: 0.0.0.0/0
-          FromPort: 443
-          ToPort: 443
+        # - IpProtocol: tcp
+        #   CidrIp: 0.0.0.0/0
+        #   FromPort: 80
+        #   ToPort: 80
+        # - IpProtocol: tcp
+        #   CidrIp: 0.0.0.0/0
+        #   FromPort: 443
+        #   ToPort: 443
         - IpProtocol: tcp
           FromPort: 3000
           ToPort: 3000
@@ -574,3 +574,184 @@ Resources:
         AliasTarget:
           HostedZoneId: !GetAtt 'loadBalancer.CanonicalHostedZoneID'
           DNSName: !GetAtt 'loadBalancer.DNSName'
+
+#-------------------------------A7------------------------------
+  
+  #Policy for EC2 instances to access codedeploy S3 bucket
+  CodeDeployEC2S3:
+    Type: 'AWS::IAM::Policy'
+    Properties: 
+      PolicyName: CodeDeploy-EC2-S3
+      PolicyDocument:
+        Version : "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Action:
+              - 's3:Get*'
+              - 's3:List*'
+            Resource:
+              - 'arn:aws:s3:::codedeploy.kartheekdabbiru.me/'
+              - 'arn:aws:s3:::codedeploy.kartheekdabbiru.me/*'
+      Roles: 
+        - Ref: "ec2csye6225"
+    
+  #GH Actions policy to upload to codedeploy S3 bucket
+  GHUploadToS3:
+    Type: 'AWS::IAM::Policy'
+    Properties: 
+      PolicyName: GH-Upload-To-S3
+      PolicyDocument:
+        Version : "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Action:
+              - 's3:Get*'
+              - 's3:List*'
+              - 's3:PutObject'
+            Resource:
+              - 'arn:aws:s3:::codedeploy.kartheekdabbiru.me/'
+              - 'arn:aws:s3:::codedeploy.kartheekdabbiru.me/*'
+      Users: 
+        - ghactions-app
+
+  #GH Actions policy to call codedeploy API to initiate app deployment on EC2 instances
+  GHCodeDeploy:
+    Type: 'AWS::IAM::Policy'
+    Properties: 
+      PolicyName: GH-Code-Deploy
+      PolicyDocument:
+        Version : "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Action:
+              - 'codedeploy:RegisterApplicationRevision'
+              - 'codedeploy:GetApplicationRevision'
+            Resource:
+              - 'arn:aws:codedeploy:us-east-1:923725678913:application:csye6225-webapp'
+          - Effect: Allow
+            Action:
+              - 'codedeploy:CreateDeployment'
+              - 'codedeploy:GetDeployment'
+            Resource:
+              - 'arn:aws:codedeploy:us-east-1:923725678913:deploymentgroup:csye6225-webapp'
+          - Effect: Allow
+            Action:
+              - 'codedeploy:GetDeploymentConfig'
+            Resource:
+              - 'arn:aws:codedeploy:us-east-1:923725678913:deploymentconfig:CodeDeployDefault.AllAtOnce'
+      Users: 
+        - ghactions-app
+
+  #gh-ec2-ami
+  GHec2ami:
+    Type: 'AWS::IAM::Policy'
+    Properties: 
+      PolicyName: gh-ec2-ami
+      PolicyDocument:
+        Version : "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Action:
+              - 'ec2:AttachVolume'
+              - 'ec2:AuthorizeSecurityGroupIngress'
+              - 'ec2:CopyImage'
+              - 'ec2:CreateImage'
+              - 'ec2:CreateKeypair'
+              - 'ec2:CreateSecurityGroup'
+              - 'ec2:CreateSnapshot'
+              - 'ec2:CreateTags'
+              - 'ec2:CreateVolume'
+              - 'ec2:DeleteKeyPair'
+              - 'ec2:DeleteSecurityGroup'
+              - 'ec2:DeleteSnapshot'
+              - 'ec2:DeleteVolume'
+              - 'ec2:DeregisterImage'
+              - 'ec2:DescribeImageAttribute'
+              - 'ec2:DescribeImages'
+              - 'ec2:DescribeInstances'
+              - 'ec2:DescribeInstanceStatus'
+              - 'ec2:DescribeRegions'
+              - 'ec2:DescribeSecurityGroups'
+              - 'ec2:DescribeSnapshots'
+              - 'ec2:DescribeSubnets'
+              - 'ec2:DescribeTags'
+              - 'ec2:DescribeVolumes'
+              - 'ec2:DetachVolume'
+              - 'ec2:GetPasswordData'
+              - 'ec2:ModifyImageAttribute'
+              - 'ec2:ModifyInstanceAttribute'
+              - 'ec2:ModifySnapshotAttribute'
+              - 'ec2:RegisterImage'
+              - 'ec2:RunInstances'
+              - 'ec2:StopInstances'
+              - 'ec2:TerminateInstances'
+            Resource:
+              - '*'
+      Users: 
+        - ghactions-app
+
+  #IAM role for EC2 instances to call AWS Services
+  # CodeDeployEC2ServiceRole:
+  #   Type: AWS::IAM::Role
+  #   Properties:
+  #     RoleName: CodeDeployEC2ServiceRole
+  #     AssumeRolePolicyDocument:
+  #       Version: "2012-10-17"
+  #       Statement:
+  #         - Effect: Allow
+  #           Principal:
+  #             Service:
+  #               - ec2.amazonaws.com
+  #           Action:
+  #             - 'sts:AssumeRole'
+
+  #IAM role for code deployment group
+  CodeDeployServiceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: CodeDeployServiceRole
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - codedeploy.amazonaws.com
+            Action:
+              - 'sts:AssumeRole'
+      ManagedPolicyArns: 
+        - arn:aws:iam::aws:policy/service-role/AWSCodeDeployRole
+
+
+  #CodeDeploy Application
+  codeDeployApplication:
+    Type: AWS::CodeDeploy::Application
+    Properties: 
+      ApplicationName: csye6225-webapp
+      ComputePlatform: Server
+
+  #Deployment Group
+  deploymentGroup:
+    Type: AWS::CodeDeploy::DeploymentGroup
+    Properties: 
+      ApplicationName: !Ref codeDeployApplication
+      AutoRollbackConfiguration: 
+        Enabled: 'true'
+        Events:
+          - DEPLOYMENT_FAILURE
+      AutoScalingGroups: 
+        - !Ref asgWebApp
+      DeploymentConfigName: CodeDeployDefault.AllAtOnce
+      DeploymentGroupName: csye6225-webapp-deployment
+      DeploymentStyle: 
+        DeploymentType: IN_PLACE
+        DeploymentOption: WITH_TRAFFIC_CONTROL
+      Ec2TagFilters: 
+        - Key: Name
+          Type: KEY_AND_VALUE
+          Value: !Sub ${AWS::StackName}-asg
+      LoadBalancerInfo: 
+        TargetGroupInfoList: 
+          - Name: !GetAtt loadBalancerTargetGroup.TargetGroupName
+      ServiceRoleArn: 'arn:aws:iam::923725678913:role/CodeDeployServiceRole'
+    DependsOn: CodeDeployServiceRole
