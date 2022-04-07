@@ -304,6 +304,9 @@ Resources:
                 - ec2.amazonaws.com
             Action:
               - 'sts:AssumeRole'
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy
+        - arn:aws:iam::aws:policy/CloudWatchAgentAdminPolicy
 
   #S3 bucket policy
   WebAppS3:
@@ -660,3 +663,18 @@ Resources:
           - Name: !GetAtt loadBalancerTargetGroup.TargetGroupName
       ServiceRoleArn: 'arn:aws:iam::923725678913:role/CodeDeployServiceRole'
     DependsOn: CodeDeployServiceRole
+
+#-------------------------------A8------------------------------
+  
+  #CloudWatch Log Group
+  cwLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties: 
+      LogGroupName: csye6225
+  
+  #CloudWatch Log Stream
+  cwLogStream:
+    Type: AWS::Logs::LogStream
+    Properties: 
+      LogGroupName: !Ref cwLogGroup
+      LogStreamName: webapp
