@@ -401,7 +401,8 @@ Resources:
       AssociatePublicIpAddress: true
       KeyName: assignment3
       UserData:
-        Fn::Base64: !Sub |
+        Fn::Base64: !Sub 
+        - |
           #!/bin/bash
           sudo touch /tmp/app_patch/.env
           sudo echo 'RDS_USERNAME = csye6225' >> /tmp/app_patch/.env
@@ -410,6 +411,12 @@ Resources:
           sudo echo 'RDS_BUCKET_NAME = kdab.prod.kartheekdabbiru.me' >> /tmp/app_patch/.env
           sudo echo 'RDS_DB_NAME = user_db' >> /tmp/app_patch/.env
           sudo echo 'AWS_BUCKET_REGION = ${bucketRegion}' >> /tmp/app_patch/.env
+          sudo echo 'DYNAMODBTABLENAME = ${DDBTableName}' >> /tmp/app_patch/.env
+          sudo echo 'SESDDBTABLENAME = ${SESDDBTableName}' >> /tmp/app_patch/.env
+          sudo echo 'SNSTOPICARN = ${SNSName}' >> /tmp/app_patch/.env
+        - SNSName : !Ref SNSTopic
+          DDBTableName : !Ref DynamoDBTable
+          SESDDBTableName : !Ref SESDynamoDBTable
       IamInstanceProfile: !Ref ec2profile
       LaunchConfigurationName: asg_launch_config
       SecurityGroups: 
@@ -678,3 +685,180 @@ Resources:
     Properties: 
       LogGroupName: !Ref cwLogGroup
       LogStreamName: webapp
+
+#-------------------------------A9------------------------------
+
+  #DynamoDB Table for Hashed Tokens
+  DynamoDBTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      AttributeDefinitions:
+        - AttributeName: username
+          AttributeType: S
+      BillingMode: PROVISIONED
+      KeySchema:
+        - AttributeName: username
+          KeyType: HASH
+      ProvisionedThroughput:
+        ReadCapacityUnits: 1
+        WriteCapacityUnits: 1
+      TableName: TokenTable
+      Tags:
+        - Key: DynamoDBTableName
+          Value: !Sub '${AWS::StackName}-Hash-Table'
+      TimeToLiveSpecification:
+        AttributeName: ttl
+        Enabled: true
+
+  #DynamoDB Table for SES
+  SESDynamoDBTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      AttributeDefinitions:
+        - AttributeName: emailid
+          AttributeType: S
+      BillingMode: PROVISIONED
+      KeySchema:
+        - AttributeName: emailid
+          KeyType: HASH
+      ProvisionedThroughput:
+        ReadCapacityUnits: 1
+        WriteCapacityUnits: 1
+      TableName: SESDDBTable
+      Tags:
+        - Key: SESDynamoDBTable
+          Value: !Sub '${AWS::StackName}-SES-Table'
+
+  #SNS Topic for Lambda Function
+  SNSTopic:
+    Type: AWS::SNS::Topic
+    DependsOn:
+      - LambdaFunction
+    Properties:
+      DisplayName: UserVerificationTopic
+      TopicName: UserVerificationTopic
+      Subscription:
+        - Endpoint: !GetAtt LambdaFunction.Arn
+          Protocol: lambda
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-sns-topic'
+
+  #Lambda Permission for SNS to invoke the function
+  LambdaSNSPermission:
+    Type: AWS::Lambda::Permission
+    DependsOn:
+      - SNSTopic
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !GetAtt LambdaFunction.Arn
+      Principal: sns.amazonaws.com
+      SourceAccount: !Ref 'AWS::AccountId'
+      SourceArn: !Ref SNSTopic
+
+  #Role for Lambda execution policy
+  LambdaExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - lambda.amazonaws.com
+            Action:
+              - 'sts:AssumeRole'
+      Path: /
+      RoleName: lambda-execution-role
+      ManagedPolicyArns:
+        - "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+
+  #GH Actions policy to upload to Lambda S3 bucket
+  GHUploadToLambdaS3:
+    Type: AWS::IAM::Policy
+    DependsOn:
+      - LambdaFunction
+    Properties:
+      Users:
+        - ghactions-lambda
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Action:
+              - "s3:GetObject"
+              - "s3:ListBucket"
+              - "s3:PutObject"
+            Resource:
+              - 'arn:aws:s3:::lambda.prod.kartheekdabbiru.me/'
+              - 'arn:aws:s3:::lambda.prod.kartheekdabbiru.me/*'
+          - Effect: Allow
+            Action:
+              - "lambda:GetFunction"
+              - "lambda:UpdateFunctionCode"
+            Resource:
+              - !GetAtt LambdaFunction.Arn
+      PolicyName: "GHUploadToLambdaS3"
+
+  #IAM policy for Lambda function
+  LambdaPolicy:
+    Type: AWS::IAM::Policy
+    DependsOn:
+      - SNSTopic
+      - DynamoDBTable
+      - SESDynamoDBTable
+    Properties:
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Action:
+              - "dynamodb:GetItem"
+              - "dynamodb:PutItem"
+              - "dynamodb:UpdateItem"
+            Resource:
+              - !GetAtt DynamoDBTable.Arn
+              - !GetAtt SESDynamoDBTable.Arn
+          - Effect: Allow
+            Action:
+              - "ses:SendEmail"
+              - "ses:SendRawEmail"
+            Resource:
+              - !Sub arn:aws:ses:${AWS::Region}:${AWS::AccountId}:identity/prod.kartheekdabbiru.me
+          - Effect: Allow
+            Action:
+              - "sns:ListTopics"
+              - "sns:CreateTopic"
+              - "sns:GetTopicAttributes"
+              - "sns:Publish"
+              - "sns:ConfirmSubscription"
+            Resource:
+              - !Ref SNSTopic
+      PolicyName: "LambdaPolicy"
+      Roles:
+        - !Ref LambdaExecutionRole
+        - !Ref ec2csye6225
+
+  #Lambda Function
+  LambdaFunction:
+    Type: AWS::Lambda::Function
+    DependsOn:
+      - LambdaExecutionRole
+    Properties:
+      Code:
+        ZipFile: exports.emailVerification = function (event, context, callback){ console.log('Test'); callback(null); }
+      Description: Lambda function for verification emails
+      Environment:
+        Variables:
+          DomainName: prod.kartheekdabbiru.me
+      FunctionName: emailVerification
+      Handler: emailVerification.emailVerification
+      MemorySize: 128
+      PackageType: Zip
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Runtime: nodejs14.x
+      Tags:
+        - Key: Name
+          Value: !Sub ${AWS::StackName}-lambdaFunction
+      Timeout: 15
