@@ -50,6 +50,7 @@ Resources:
       VpcId: !Ref vpc
       CidrBlock: !Ref aSubnetCIDR
       AvailabilityZone: !Select [0, !GetAZs ""]
+      MapPublicIpOnLaunch: true
       Tags:
       - Key: Name
         Value: subnet A
@@ -60,6 +61,7 @@ Resources:
       VpcId: !Ref vpc
       CidrBlock: !Ref bSubnetCIDR
       AvailabilityZone: !Select [1, !GetAZs ""]
+      MapPublicIpOnLaunch: true
       Tags:
       - Key: Name
         Value: subnet B
@@ -70,6 +72,7 @@ Resources:
       VpcId: !Ref vpc
       CidrBlock: !Ref cSubnetCIDR
       AvailabilityZone: !Select [2, !GetAZs ""]
+      MapPublicIpOnLaunch: true
       Tags:
       - Key: Name
         Value: subnet C
@@ -372,6 +375,9 @@ Resources:
       DBParameterGroupName: !Ref rdsParameterGroup
       VPCSecurityGroups: 
         - !Ref dbSecurityGroup
+      KmsKeyId: !Ref RDSKey
+      StorageEncrypted: true
+    DependsOn: RDSKey
 
   #-------------------------------A6------------------------------
 
@@ -393,40 +399,83 @@ Resources:
           ToPort: 443
 
   #Launch Configuration
-  asgLaunchConfig:
-    Type: AWS::AutoScaling::LaunchConfiguration
+  # asgLaunchConfig:
+  #   Type: AWS::AutoScaling::LaunchConfiguration
+  #   Properties:
+  #     ImageId: !Ref imageId
+  #     InstanceType: t2.micro
+  #     AssociatePublicIpAddress: true
+  #     KeyName: assignment3
+  #     UserData:
+  #       Fn::Base64: !Sub 
+  #       - |
+  #         #!/bin/bash
+  #         sudo touch /tmp/app_patch/.env
+  #         sudo echo 'RDS_USERNAME = csye6225' >> /tmp/app_patch/.env
+  #         sudo echo 'RDS_PASSWORD = multi-bun#6969' >> /tmp/app_patch/.env
+  #         sudo echo 'RDS_HOSTNAME = ${rdsInstance.Endpoint.Address}' >> /tmp/app_patch/.env
+  #         sudo echo 'RDS_BUCKET_NAME = kdab.prod.kartheekdabbiru.me' >> /tmp/app_patch/.env
+  #         sudo echo 'RDS_DB_NAME = user_db' >> /tmp/app_patch/.env
+  #         sudo echo 'AWS_BUCKET_REGION = ${bucketRegion}' >> /tmp/app_patch/.env
+  #         sudo echo 'DYNAMODBTABLENAME = ${DDBTableName}' >> /tmp/app_patch/.env
+  #         sudo echo 'SESDDBTABLENAME = ${SESDDBTableName}' >> /tmp/app_patch/.env
+  #         sudo echo 'SNSTOPICARN = ${SNSName}' >> /tmp/app_patch/.env
+  #       - SNSName : !Ref SNSTopic
+  #         DDBTableName : !Ref DynamoDBTable
+  #         SESDDBTableName : !Ref SESDynamoDBTable
+  #     IamInstanceProfile: !Ref ec2profile
+  #     LaunchConfigurationName: asg_launch_config
+  #     SecurityGroups: 
+  #       - !Ref ec2SecurityGroup
+  #     BlockDeviceMappings:
+  #       - DeviceName: /dev/xvda
+  #         Ebs:
+  #           VolumeType: gp2
+  #           VolumeSize: '20'
+  #           DeleteOnTermination: true
+  #     Encrypted: true
+  #     KmsKeyId: !GetAtt EBSKey.Arn
+  #   DependsOn: EBSKey
+
+  #Launch Template
+  asgLaunchTemplate:
+    Type: AWS::EC2::LaunchTemplate
     Properties:
-      ImageId: !Ref imageId
-      InstanceType: t2.micro
-      AssociatePublicIpAddress: true
-      KeyName: assignment3
-      UserData:
-        Fn::Base64: !Sub 
-        - |
-          #!/bin/bash
-          sudo touch /tmp/app_patch/.env
-          sudo echo 'RDS_USERNAME = csye6225' >> /tmp/app_patch/.env
-          sudo echo 'RDS_PASSWORD = multi-bun#6969' >> /tmp/app_patch/.env
-          sudo echo 'RDS_HOSTNAME = ${rdsInstance.Endpoint.Address}' >> /tmp/app_patch/.env
-          sudo echo 'RDS_BUCKET_NAME = kdab.prod.kartheekdabbiru.me' >> /tmp/app_patch/.env
-          sudo echo 'RDS_DB_NAME = user_db' >> /tmp/app_patch/.env
-          sudo echo 'AWS_BUCKET_REGION = ${bucketRegion}' >> /tmp/app_patch/.env
-          sudo echo 'DYNAMODBTABLENAME = ${DDBTableName}' >> /tmp/app_patch/.env
-          sudo echo 'SESDDBTABLENAME = ${SESDDBTableName}' >> /tmp/app_patch/.env
-          sudo echo 'SNSTOPICARN = ${SNSName}' >> /tmp/app_patch/.env
-        - SNSName : !Ref SNSTopic
-          DDBTableName : !Ref DynamoDBTable
-          SESDDBTableName : !Ref SESDynamoDBTable
-      IamInstanceProfile: !Ref ec2profile
-      LaunchConfigurationName: asg_launch_config
-      SecurityGroups: 
-        - !Ref ec2SecurityGroup
-      BlockDeviceMappings:
-        - DeviceName: /dev/xvda
-          Ebs:
-            VolumeType: gp2
-            VolumeSize: '20'
-            DeleteOnTermination: true
+      LaunchTemplateName: asg_launch_config
+      LaunchTemplateData:
+        BlockDeviceMappings:
+          - DeviceName: /dev/xvda
+            Ebs:
+              VolumeSize: '20'
+              VolumeType: gp2
+              DeleteOnTermination: true
+              Encrypted: true
+              KmsKeyId: !GetAtt EBSKey.Arn
+        InstanceType: t2.micro
+        KeyName: assignment3
+        ImageId: !Ref imageId
+        SecurityGroupIds:
+          - !Ref ec2SecurityGroup
+        IamInstanceProfile:
+          Name: !Ref ec2profile
+        UserData:
+          Fn::Base64: !Sub 
+          - |
+            #!/bin/bash
+            sudo touch /tmp/app_patch/.env
+            sudo echo 'RDS_USERNAME = csye6225' >> /tmp/app_patch/.env
+            sudo echo 'RDS_PASSWORD = multi-bun#6969' >> /tmp/app_patch/.env
+            sudo echo 'RDS_HOSTNAME = ${rdsInstance.Endpoint.Address}' >> /tmp/app_patch/.env
+            sudo echo 'RDS_BUCKET_NAME = kdab.prod.kartheekdabbiru.me' >> /tmp/app_patch/.env
+            sudo echo 'RDS_DB_NAME = user_db' >> /tmp/app_patch/.env
+            sudo echo 'AWS_BUCKET_REGION = ${bucketRegion}' >> /tmp/app_patch/.env
+            sudo echo 'DYNAMODBTABLENAME = ${DDBTableName}' >> /tmp/app_patch/.env
+            sudo echo 'SESDDBTABLENAME = ${SESDDBTableName}' >> /tmp/app_patch/.env
+            sudo echo 'SNSTOPICARN = ${SNSName}' >> /tmp/app_patch/.env
+          - SNSName : !Ref SNSTopic
+            DDBTableName : !Ref DynamoDBTable
+            SESDDBTableName : !Ref SESDynamoDBTable
+    DependsOn: EBSKey
 
   #Auto Scaling Group
   asgWebApp:
@@ -438,7 +487,10 @@ Resources:
         - us-east-1b
         - us-east-1c
       Cooldown: '60'
-      LaunchConfigurationName: !Ref asgLaunchConfig
+      # LaunchConfigurationName: !Ref asgLaunchConfig
+      LaunchTemplate:
+        LaunchTemplateId: !Ref asgLaunchTemplate
+        Version: !GetAtt asgLaunchTemplate.LatestVersionNumber
       HealthCheckGracePeriod: 90
       HealthCheckType: EC2
       MinSize: '1'
@@ -512,9 +564,11 @@ Resources:
       DefaultActions:
         - Type: forward
           TargetGroupArn: !Ref loadBalancerTargetGroup
+      Certificates: 
+        - CertificateArn: arn:aws:acm:us-east-1:923725678913:certificate/d3af2d4b-eb99-4841-9942-4cd0b026b8aa
       LoadBalancerArn: !Ref loadBalancer
-      Port: 80
-      Protocol: HTTP
+      Port: 443
+      Protocol: HTTPS
 
   #Scale up policy
   scaleUpPolicy:
@@ -862,3 +916,82 @@ Resources:
         - Key: Name
           Value: !Sub ${AWS::StackName}-lambdaFunction
       Timeout: 15
+
+#------------------------------A10------------------------------
+
+  #RDS KMS Key
+  RDSKey:
+    Type: AWS::KMS::Key
+    Properties: 
+      Description: KMS key for RDS instance
+      Enabled: true
+      EnableKeyRotation: true
+      PendingWindowInDays: 7
+      KeyPolicy:
+        Version: 2012-10-17
+        Id: rds-key
+        Statement:
+          - Sid: Enable IAM User Permissions
+            Effect: Allow
+            Principal:
+              AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:root'
+            Action: 'kms:*'
+            Resource: '*'
+
+  #RDS KMS key alias
+  RDSKeyAlias:
+    Type: AWS::KMS::Alias
+    Properties:
+      AliasName: alias/rds
+      TargetKeyId:
+        Ref: RDSKey
+
+  #EBS KMS Key      
+  EBSKey:
+    Type: AWS::KMS::Key
+    Properties: 
+      Description: KMS key for EBS instance
+      Enabled: true
+      EnableKeyRotation: true
+      PendingWindowInDays: 7
+      KeyPolicy:
+        Version: 2012-10-17
+        Id: ebs-key
+        Statement:
+          - Sid: Enable IAM User Permissions
+            Effect: Allow
+            Principal:
+              AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:root'
+            Action: 'kms:*'
+            Resource: '*'
+          - Sid: Allow use of the key by the default service linked role
+            Effect: Allow
+            Principal:
+              AWS:
+              - !Sub arn:aws:iam::${AWS::AccountId}:role/aws-service-role/autoscaling.amazonaws.com/AWSServiceRoleForAutoScaling
+            Action:
+            - kms:Encrypt
+            - kms:Decrypt
+            - kms:ReEncrypt*
+            - kms:GenerateDataKey*
+            - kms:DescribeKey
+            Resource: "*"
+          - Sid: Allow attachment of persistent resources
+            Effect: Allow
+            Principal:
+              AWS:
+              - !Sub arn:aws:iam::${AWS::AccountId}:role/aws-service-role/autoscaling.amazonaws.com/AWSServiceRoleForAutoScaling
+            Action:
+            - kms:CreateGrant
+            Resource: "*"
+            Condition:
+              Bool:
+                kms:GrantIsForAWSResource: true
+
+  #EBS KMS key alias
+  EBSKeyAlias:
+      Type: AWS::KMS::Alias
+      Properties:
+        AliasName: alias/ebs
+        TargetKeyId:
+          Ref: EBSKey
